@@ -1,0 +1,26 @@
+name: Go
+
+on:
+  push:
+    branches: [ main ]
+    
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: latest
+
+    - name: Build Linux
+      env: 
+        GOOS : linux
+      run: go build -v -o getEmail.out ./...
+    - name: Build windows
+      env: 
+        GOOS : windows
+      run: go build -v -o getEmail.exe ./...
