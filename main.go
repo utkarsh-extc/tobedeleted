@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"go/src/io/ioutil"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/smtp"
