@@ -60,8 +60,6 @@ func main() {
 		return
 	}
 
-	var availableCenters []Centers
-
 	ticker := time.NewTicker(duration)
 	defer ticker.Stop()
 
@@ -110,6 +108,7 @@ loop:
 					fmt.Errorf("unable to unmarshal: %v", err)
 				}
 			}()
+			var availableCenters []Centers
 
 			found := false
 			for _, c := range slots.Centers {
