@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/smtp"
+	"os"
 	"strings"
 	"time"
 
@@ -93,12 +94,18 @@ createOtp:
 		goto createOtp
 	}
 
+readOtp:
 	// read otp
 	fmt.Println("enter received opt on number", mobile)
+	fmt.Println("press 0 and enter to retry")
+
 	otp := ""
-	_, _ = fmt.Scanf("%s", &otp)
+	_, _ = fmt.Fscanf(os.Stdin,"%s", &otp)
 	if otp == "0" {
 		goto createOtp
+	}
+	if len(otp)<6{
+		goto readOtp
 	}
 
 	h := sha256.New()
