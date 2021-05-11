@@ -14,8 +14,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.16
     - name: Build Linux
       env:
         GOOS : linux
@@ -24,7 +23,6 @@ jobs:
       env:
         GOOS : windows
       run: go build -v -o getEmail.exe ./...
-
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v2.2.3
       with:
