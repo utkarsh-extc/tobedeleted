@@ -244,6 +244,11 @@ loop:
 
 					}(benResp)
 
+					if len(beneficiaries) < 1 {
+						fmt.Println("please add beneficiaries")
+						return
+					}
+
 					// schedule appointment
 					for i := range availableCenters {
 						schInput := ScheduleRequestInput{
