@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -10,65 +12,46 @@ import (
 	"net/smtp"
 	"strings"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 var c http.Client
 
-type GetResponse struct {
-	Centers []Centers `json:"centers"`
-}
-type Sessions struct {
-	SessionID         string   `json:"session_id"`
-	Date              string   `json:"date"`
-	AvailableCapacity int      `json:"available_capacity"`
-	MinAgeLimit       int      `json:"min_age_limit"`
-	Vaccine           string   `json:"vaccine"`
-	Slots             []string `json:"slots"`
-}
-type Centers struct {
-	CenterID     int        `json:"center_id"`
-	Name         string     `json:"name"`
-	Address      string     `json:"address"`
-	StateName    string     `json:"state_name"`
-	DistrictName string     `json:"district_name"`
-	BlockName    string     `json:"block_name"`
-	Pincode      int        `json:"pincode"`
-	Lat          int        `json:"lat"`
-	Long         int        `json:"long"`
-	From         string     `json:"from"`
-	To           string     `json:"to"`
-	FeeType      string     `json:"fee_type"`
-	Sessions     []Sessions `json:"sessions"`
-}
-
 var pinCode = ""
 var emailHost = "smtp.gmail.com"
 var emailFrom = ""
-var emailRecipients=[]string{""}
+var emailRecipients = []string{""}
 var emailPassword = ""
+
 // api limit 100 req/5min per ip
-var duration = 5*time.Minute/95
+var duration = 5 * time.Minute / 95
 var count int
+var mobile string
+var secret = "U2FsdGVkX18qwZAGasLkIRs7giixSNa0qHKofrof7HAZ+creL7yka6fv6Jfp/ViSnyIVtCQpLRjapsF8JYBAVw=="
+var txnId string
+var token string
+var beneficiaries []Beneficiaries
+var aptId string
+var booked bool
 
 func main() {
-	list:=""
+	list := ""
 	flag.StringVar(&pinCode, "pincode", "411027", "pincode of your area")
 	flag.StringVar(&emailFrom, "emailId", emailFrom, "your_id@gmail.com")
-	flag.StringVar(&list,"to",emailFrom,"comma separated email list")
+	flag.StringVar(&list, "to", emailFrom, "comma separated email list")
 	flag.StringVar(&emailPassword, "password", emailPassword, "Google App Password \ncreate new using https://support.google.com/accounts/answer/185833")
 	flag.DurationVar(&duration, "interval", duration, "time interval as duration \ne.g. 30s,5m,1h")
+	flag.StringVar(&mobile, "mobileNumber", "", "10 digit mobile number")
 
 	flag.Parse()
 
-	emailRecipients=strings.Split(list,",")
+	emailRecipients = strings.Split(list, ",")
 
-	if pinCode == "" || emailPassword == "" || emailFrom == "" || len(emailRecipients)<1 {
+	if pinCode == "" || emailPassword == "" || emailFrom == "" || len(emailRecipients) < 1 || mobile == "" || len(mobile) == 11 {
 		flag.Usage()
 		return
 	}
-
-	ticker := time.NewTicker(duration)
-	defer ticker.Stop()
 
 	fmt.Println("looping started")
 
@@ -76,34 +59,135 @@ func main() {
 		return http.ErrUseLastResponse
 	}
 
+createOtp:
+	// create otp
+	otpReq, _ := http.NewRequest(http.MethodPost, "https://cdn-api.co-vin.in/api/v2/auth/generateMobileOTP",
+		bytes.NewBufferString(fmt.Sprintf("{\"secret\":\"%s\",\"mobile\":%s}", secret, mobile)))
+	otpReq.Header.Set("cache-control", "no-cache")
+	otpReq.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
+
+	otpResp, err := c.Do(otpReq)
+	if err != nil {
+		fmt.Errorf("%v\n", err)
+		goto createOtp
+	}
+	func(resp *http.Response) {
+		defer func() { _ = resp.Body.Close() }()
+		all, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return
+		}
+
+		tId := make(map[string]string)
+		err = json.Unmarshal(all, &tId)
+		if err != nil {
+			fmt.Errorf("unable to unmarshal: %v", err)
+			return
+		}
+
+		txnId, _ = tId["txnId"]
+
+	}(otpResp)
+
+	if txnId == "" {
+		goto createOtp
+	}
+
+	// read otp
+	fmt.Println("enter received opt on number", mobile)
+	otp := ""
+	_, _ = fmt.Scanf("%s", &otp)
+	if otp == "0" {
+		goto createOtp
+	}
+
+	h := sha256.New()
+	h.Write([]byte(otp))
+
+	//create token
+	body := fmt.Sprintf("{\"otp\":\"%x\",\"txnId\":\"%s\"}", h.Sum(nil), txnId)
+	tokReq, _ := http.NewRequest(http.MethodPost, "https://cdn-api.co-vin.in/api/v2/auth/validateMobileOtp",
+		bytes.NewBufferString(body))
+	tokReq.Header.Set("pragma", "no-cache")
+	tokReq.Header.Set("content-type", "application/json")
+	tokReq.Header.Set("content-length", string(rune(len(body))))
+	tokReq.Header.Set("origin", "https://selfregistration.cowin.gov.in")
+	tokReq.Header.Set("referer", "https://selfregistration.cowin.gov.in/")
+	tokReq.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
+
+	tokResp, err := c.Do(tokReq)
+	if err != nil {
+		fmt.Errorf("%v\n", err)
+		goto createOtp
+	}
+	func(resp *http.Response) {
+		defer func() { _ = resp.Body.Close() }()
+		all, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return
+		}
+
+		tok := make(map[string]string)
+		err = json.Unmarshal(all, &tok)
+		if err != nil {
+			fmt.Errorf("unable to unmarshal: %v", err)
+			return
+		}
+
+		token, _ = tok["token"]
+
+	}(tokResp)
+
+	if token == "" {
+		goto createOtp
+	}
+
+	// create timer on token expiry
+	jwtToken, _ := jwt.Parse(token, nil)
+	exp, _ := jwtToken.Claims.(jwt.MapClaims)["exp"].(float64)
+	if exp == 0 {
+		goto createOtp
+	}
+
+	expChan := time.After(time.Until(time.Unix(int64(exp), 0)))
+	fmt.Println("token will expired at", time.Unix(int64(exp), 0).String())
+	ticker := time.NewTicker(duration)
+
 loop:
 	for {
 		select {
+		case <-expChan:
+			fmt.Println("token expired")
+			txnId = ""
+			token = ""
+			ticker.Stop()
+			goto createOtp
+
 		case <-ticker.C:
 			now := time.Now()
 			date := fmt.Sprintf("%02d-%02d-%04d", now.Day(), now.Month(), now.Year())
 			req, _ := http.NewRequest(http.MethodGet,
 				"https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin?pincode="+pinCode+"&date="+date, nil)
-
+			req.Header.Set("authorization", "Bearer "+token)
 			req.Header.Set("cache-control", "no-cache")
 			req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
 
-			resp, err := c.Do(req)
+			slotResp, err := c.Do(req)
 			if err != nil {
 				fmt.Errorf("%v\n", err)
 				time.Sleep(30 * time.Second)
 				continue
 			}
 
-			if resp.StatusCode != http.StatusOK {
-				fmt.Errorf("%v\n", resp.StatusCode)
+			if slotResp.StatusCode != http.StatusOK {
+				fmt.Errorf("%v\n", slotResp.StatusCode)
 				time.Sleep(30 * time.Second)
 				continue
 			}
 
 			slots := new(GetResponse)
 
-			func() {
+			func(resp *http.Response) {
 				defer func() { _ = resp.Body.Close() }()
 				all, err := ioutil.ReadAll(resp.Body)
 				if err != nil {
@@ -114,7 +198,7 @@ loop:
 				if err != nil {
 					fmt.Errorf("unable to unmarshal: %v", err)
 				}
-			}()
+			}(slotResp)
 			var availableCenters []Centers
 
 			found := false
@@ -128,6 +212,96 @@ loop:
 			}
 			if found {
 				func() {
+					// get beneficiaries
+					benReq, _ := http.NewRequest(http.MethodGet,
+						"https://cdn-api.co-vin.in/api/v2/appointment/beneficiaries", nil)
+					benReq.Header.Set("authorization", "Bearer "+token)
+					benReq.Header.Set("cache-control", "no-cache")
+					benReq.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
+
+					benResp, err := c.Do(benReq)
+					if err != nil {
+						fmt.Errorf("%v\n", err)
+						return
+					}
+					func(resp *http.Response) {
+						defer func() { _ = resp.Body.Close() }()
+						all, err := ioutil.ReadAll(resp.Body)
+						if err != nil {
+							return
+						}
+
+						ben := new(GetBeneficiariesResponse)
+						err = json.Unmarshal(all, ben)
+						if err != nil {
+							fmt.Errorf("unable to unmarshal: %v", err)
+							return
+						}
+
+						for _, b := range ben.Beneficiaries {
+							beneficiaries = append(beneficiaries, b)
+						}
+
+					}(benResp)
+
+					// schedule appointment
+					for i := range availableCenters {
+						schInput := ScheduleRequestInput{
+							Dose: func() int {
+								if beneficiaries[0].Dose1Date == "" {
+									return 1
+								} else {
+									return 2
+								}
+							}(),
+							SessionID: availableCenters[i].Sessions[0].SessionID,
+							Slot:      availableCenters[i].Sessions[0].Slots[0],
+							Beneficiaries: func() (ben []string) {
+								for _, b := range beneficiaries {
+									ben = append(ben,
+										b.BeneficiaryReferenceID)
+								}
+								return
+							}(),
+						}
+
+						blob, _ := json.Marshal(schInput)
+
+						// POST https://cdn-api.co-vin.in/api/v2/appointment/schedule
+						schReq, _ := http.NewRequest(http.MethodPost,
+							"https://cdn-api.co-vin.in/api/v2/appointment/schedule", bytes.NewBuffer(blob))
+						schReq.Header.Set("authorization", "Bearer "+token)
+						schReq.Header.Set("cache-control", "no-cache")
+						schReq.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
+
+						schResp, err := c.Do(schReq)
+						if err != nil {
+							fmt.Errorf("%v\n", err)
+							return
+						}
+						if schResp.StatusCode != http.StatusOK {
+							continue
+						}
+
+						func(resp *http.Response) {
+							defer func() { _ = resp.Body.Close() }()
+							all, err := ioutil.ReadAll(resp.Body)
+							if err != nil {
+								return
+							}
+
+							apt := make(map[string]string)
+							err = json.Unmarshal(all, apt)
+							if err != nil {
+								fmt.Errorf("unable to unmarshal: %v", err)
+								return
+							}
+
+							aptId, _ = apt["appointment_id"]
+							booked = true
+						}(schResp)
+						break
+					}
 					blob, _ := json.MarshalIndent(availableCenters, "", "  ")
 					fmt.Println(string(blob))
 
@@ -143,9 +317,11 @@ loop:
 						"From: Golang looper\r\n" +
 						"Subject: Available Centers!\r\n" +
 						"\r\n" +
+						"Appointment ID: " + aptId + "\r\n" +
+						"\r\n" +
 						"List : \r\n" +
 						string(blob) + "\r\n")
-					err := smtp.SendMail(fmt.Sprintf("%s:%d", emailHost, emailPort), auth, emailFrom, to, msg)
+					err = smtp.SendMail(fmt.Sprintf("%s:%d", emailHost, emailPort), auth, emailFrom, to, msg)
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -154,7 +330,7 @@ loop:
 				}()
 
 				time.Sleep(5 * time.Minute)
-				if count > 10 {
+				if count > 10 || booked {
 					break loop
 				}
 			} else {
