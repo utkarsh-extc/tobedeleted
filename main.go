@@ -100,11 +100,11 @@ readOtp:
 	fmt.Println("press 0 and enter to retry")
 
 	otp := ""
-	_, _ = fmt.Fscanf(os.Stdin,"%s", &otp)
+	_, _ = fmt.Fscanf(os.Stdin, "%s", &otp)
 	if otp == "0" {
 		goto createOtp
 	}
-	if len(otp)<6{
+	if len(otp) < 6 {
 		goto readOtp
 	}
 
@@ -143,6 +143,8 @@ readOtp:
 
 		token, _ = tok["token"]
 
+		_ = ioutil.WriteFile("token.txt", []byte(token), 0644)
+
 	}(tokResp)
 
 	if token == "" {
@@ -167,6 +169,7 @@ loop:
 			fmt.Println("token expired")
 			txnId = ""
 			token = ""
+			_ = os.Remove("token.txt")
 			ticker.Stop()
 			goto createOtp
 
@@ -174,7 +177,7 @@ loop:
 			now := time.Now()
 			date := fmt.Sprintf("%02d-%02d-%04d", now.Day(), now.Month(), now.Year())
 			req, _ := http.NewRequest(http.MethodGet,
-				"https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin?pincode="+pinCode+"&date="+date, nil)
+				"https://cdn-api.co-vin.in/api/v2/appointment/sessions/calendarByPin?pincode="+pinCode+"&date="+date, nil)
 			req.Header.Set("authorization", "Bearer "+token)
 			req.Header.Set("cache-control", "no-cache")
 			req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
