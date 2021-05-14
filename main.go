@@ -35,6 +35,8 @@ var token string
 var beneficiaries []Beneficiaries
 var aptId string
 var booked bool
+var minAge int
+var vaccineName string
 
 func main() {
 	list := ""
@@ -44,12 +46,19 @@ func main() {
 	flag.StringVar(&emailPassword, "password", emailPassword, "Google App Password \ncreate new using https://support.google.com/accounts/answer/185833")
 	flag.DurationVar(&duration, "interval", duration, "time interval as duration \ne.g. 30s,5m,1h")
 	flag.StringVar(&mobile, "mobileNumber", "", "10 digit mobile number")
+	flag.IntVar(&minAge, "minage", 18, "min age group 18 or 45")
+	flag.StringVar(&vaccineName, "vaccine", "COVISHIELD", "perferred vaccine name\ne.g COVISHIELD or COVAXIN")
 
 	flag.Parse()
 
 	emailRecipients = strings.Split(list, ",")
 
-	if pinCode == "" || emailPassword == "" || emailFrom == "" || len(emailRecipients) < 1 || mobile == "" || len(mobile) == 11 {
+	if !(strings.Contains(vaccineName, "COVAXIN") || strings.Contains(vaccineName, "COVISHIELD")) {
+		flag.Usage()
+		return
+	}
+
+	if pinCode == "" || len(emailRecipients) < 1 || mobile == "" || len(mobile) == 11 {
 		flag.Usage()
 		return
 	}
@@ -69,7 +78,7 @@ createOtp:
 
 	otpResp, err := c.Do(otpReq)
 	if err != nil {
-		fmt.Errorf("%v\n", err)
+		_ = fmt.Errorf("%v", err)
 		goto createOtp
 	}
 	func(resp *http.Response) {
@@ -82,7 +91,7 @@ createOtp:
 		tId := make(map[string]string)
 		err = json.Unmarshal(all, &tId)
 		if err != nil {
-			fmt.Errorf("unable to unmarshal: %v", err)
+			_ = fmt.Errorf("unable to unmarshal: %v", err)
 			return
 		}
 
@@ -124,7 +133,7 @@ readOtp:
 
 	tokResp, err := c.Do(tokReq)
 	if err != nil {
-		fmt.Errorf("%v\n", err)
+		_ = fmt.Errorf("%v", err)
 		goto createOtp
 	}
 	func(resp *http.Response) {
@@ -137,7 +146,7 @@ readOtp:
 		tok := make(map[string]string)
 		err = json.Unmarshal(all, &tok)
 		if err != nil {
-			fmt.Errorf("unable to unmarshal: %v", err)
+			_ = fmt.Errorf("unable to unmarshal: %v", err)
 			return
 		}
 
@@ -184,13 +193,13 @@ loop:
 
 			slotResp, err := c.Do(req)
 			if err != nil {
-				fmt.Errorf("%v\n", err)
+				_ = fmt.Errorf("%v", err)
 				time.Sleep(30 * time.Second)
 				continue
 			}
 
 			if slotResp.StatusCode != http.StatusOK {
-				fmt.Errorf("%v\n", slotResp.StatusCode)
+				_ = fmt.Errorf("%v", slotResp.StatusCode)
 				time.Sleep(30 * time.Second)
 				continue
 			}
@@ -201,12 +210,12 @@ loop:
 				defer func() { _ = resp.Body.Close() }()
 				all, err := ioutil.ReadAll(resp.Body)
 				if err != nil {
-					fmt.Errorf("%v:stop using this tool\n", resp.StatusCode)
+					_ = fmt.Errorf("error code %v", resp.StatusCode)
 				}
 
 				err = json.Unmarshal(all, slots)
 				if err != nil {
-					fmt.Errorf("unable to unmarshal: %v", err)
+					_ = fmt.Errorf("unable to unmarshal: %v", err)
 				}
 			}(slotResp)
 			var availableCenters []Centers
@@ -214,7 +223,7 @@ loop:
 			found := false
 			for _, c := range slots.Centers {
 				for _, s := range c.Sessions {
-					if s.AvailableCapacity > 0 && s.MinAgeLimit < 45 {
+					if s.AvailableCapacity > 0 && s.MinAgeLimit == minAge {
 						availableCenters = append(availableCenters, c)
 						found = true
 					}
@@ -231,7 +240,7 @@ loop:
 
 					benResp, err := c.Do(benReq)
 					if err != nil {
-						fmt.Errorf("%v\n", err)
+						_ = fmt.Errorf("%v", err)
 						return
 					}
 					func(resp *http.Response) {
@@ -244,13 +253,11 @@ loop:
 						ben := new(GetBeneficiariesResponse)
 						err = json.Unmarshal(all, ben)
 						if err != nil {
-							fmt.Errorf("unable to unmarshal: %v", err)
+							_ = fmt.Errorf("unable to unmarshal: %v", err)
 							return
 						}
 
-						for _, b := range ben.Beneficiaries {
-							beneficiaries = append(beneficiaries, b)
-						}
+						beneficiaries = append(beneficiaries, ben.Beneficiaries...)
 
 					}(benResp)
 
@@ -291,7 +298,7 @@ loop:
 
 						schResp, err := c.Do(schReq)
 						if err != nil {
-							fmt.Errorf("%v\n", err)
+							_ = fmt.Errorf("%v", err)
 							return
 						}
 						if schResp.StatusCode != http.StatusOK {
@@ -306,9 +313,9 @@ loop:
 							}
 
 							apt := make(map[string]string)
-							err = json.Unmarshal(all, apt)
+							err = json.Unmarshal(all, &apt)
 							if err != nil {
-								fmt.Errorf("unable to unmarshal: %v", err)
+								_ = fmt.Errorf("unable to unmarshal: %v", err)
 								return
 							}
 
@@ -317,30 +324,35 @@ loop:
 						}(schResp)
 						break
 					}
-					blob, _ := json.MarshalIndent(availableCenters, "", "  ")
-					fmt.Println(string(blob))
 
-					emailPort := 587
+					//send email if password is provided
+					if emailPassword != "" {
+						func() {
+							blob, _ := json.MarshalIndent(availableCenters, "", "  ")
+							fmt.Println(string(blob))
 
-					// Set up authentication information.
-					auth := smtp.PlainAuth("", emailFrom, emailPassword, emailHost)
+							emailPort := 587
 
-					// Connect to the server, authenticate, set the sender and recipient,
-					// and send the email all in one step.
-					to := emailRecipients
-					msg := []byte("To: " + list + "\r\n" +
-						"From: Golang looper\r\n" +
-						"Subject: Available Centers!\r\n" +
-						"\r\n" +
-						"Appointment ID: " + aptId + "\r\n" +
-						"\r\n" +
-						"List : \r\n" +
-						string(blob) + "\r\n")
-					err = smtp.SendMail(fmt.Sprintf("%s:%d", emailHost, emailPort), auth, emailFrom, to, msg)
-					if err != nil {
-						log.Fatal(err)
+							// Set up authentication information.
+							auth := smtp.PlainAuth("", emailFrom, emailPassword, emailHost)
+
+							// Connect to the server, authenticate, set the sender and recipient,
+							// and send the email all in one step.
+							to := emailRecipients
+							msg := []byte("To: " + list + "\r\n" +
+								"From: Golang looper\r\n" +
+								"Subject: Available Centers!\r\n" +
+								"\r\n" +
+								"Appointment ID: " + aptId + "\r\n" +
+								"\r\n" +
+								"List : \r\n" +
+								string(blob) + "\r\n")
+							err = smtp.SendMail(fmt.Sprintf("%s:%d", emailHost, emailPort), auth, emailFrom, to, msg)
+							if err != nil {
+								log.Fatal(err)
+							}
+						}()
 					}
-
 					count++
 				}()
 
