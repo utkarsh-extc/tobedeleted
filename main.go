@@ -95,7 +95,7 @@ createOtp:
 			return
 		}
 
-		txnID, _ = tID["txnID"]
+		txnID, _ = tID["txnId"]
 
 	}(otpResp)
 
@@ -121,7 +121,7 @@ readOtp:
 	h.Write([]byte(otp))
 
 	//create token
-	body := fmt.Sprintf("{\"otp\":\"%x\",\"txnID\":\"%s\"}", h.Sum(nil), txnID)
+	body := fmt.Sprintf("{\"otp\":\"%x\",\"txnId\":\"%s\"}", h.Sum(nil), txnID)
 	tokReq, _ := http.NewRequest(http.MethodPost, "https://cdn-api.co-vin.in/api/v2/auth/validateMobileOtp",
 		bytes.NewBufferString(body))
 	tokReq.Header.Set("pragma", "no-cache")

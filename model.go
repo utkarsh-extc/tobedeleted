@@ -80,7 +80,7 @@ type Centers struct {
 	DistrictNameL string        `json:"district_name_l"`
 	BlockName     string        `json:"block_name"`
 	BlockNameL    string        `json:"block_name_l"`
-	Pincode       string        `json:"pincode"`
+	Pincode       int           `json:"pincode"`
 	Lat           float64       `json:"lat"`
 	Long          float64       `json:"long"`
 	From          string        `json:"from"`
