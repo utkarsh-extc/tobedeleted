@@ -53,26 +53,39 @@ type Beneficiaries struct {
 type GetResponse struct {
 	Centers []Centers `json:"centers"`
 }
+
+type VaccineFees struct {
+	Vaccine string `json:"vaccine"`
+	Fee     string `json:"fee"`
+}
 type Sessions struct {
-	SessionID         string   `json:"session_id"`
-	Date              string   `json:"date"`
-	AvailableCapacity int      `json:"available_capacity"`
-	MinAgeLimit       int      `json:"min_age_limit"`
-	Vaccine           string   `json:"vaccine"`
-	Slots             []string `json:"slots"`
+	SessionID              string   `json:"session_id"`
+	Date                   string   `json:"date"`
+	AvailableCapacity      int      `json:"available_capacity"`
+	AvailableCapacityDose1 int      `json:"available_capacity_dose1"`
+	AvailableCapacityDose2 int      `json:"available_capacity_dose2"`
+	MinAgeLimit            int      `json:"min_age_limit"`
+	Vaccine                string   `json:"vaccine"`
+	Slots                  []string `json:"slots"`
 }
 type Centers struct {
-	CenterID     int        `json:"center_id"`
-	Name         string     `json:"name"`
-	Address      string     `json:"address"`
-	StateName    string     `json:"state_name"`
-	DistrictName string     `json:"district_name"`
-	BlockName    string     `json:"block_name"`
-	Pincode      int        `json:"pincode"`
-	Lat          int        `json:"lat"`
-	Long         int        `json:"long"`
-	From         string     `json:"from"`
-	To           string     `json:"to"`
-	FeeType      string     `json:"fee_type"`
-	Sessions     []Sessions `json:"sessions"`
+	CenterID      int           `json:"center_id"`
+	Name          string        `json:"name"`
+	NameL         string        `json:"name_l"`
+	Address       string        `json:"address"`
+	AddressL      string        `json:"address_l"`
+	StateName     string        `json:"state_name"`
+	StateNameL    string        `json:"state_name_l"`
+	DistrictName  string        `json:"district_name"`
+	DistrictNameL string        `json:"district_name_l"`
+	BlockName     string        `json:"block_name"`
+	BlockNameL    string        `json:"block_name_l"`
+	Pincode       string        `json:"pincode"`
+	Lat           float64       `json:"lat"`
+	Long          float64       `json:"long"`
+	From          string        `json:"from"`
+	To            string        `json:"to"`
+	FeeType       string        `json:"fee_type"`
+	VaccineFees   []VaccineFees `json:"vaccine_fees"`
+	Sessions      []Sessions    `json:"sessions"`
 }
