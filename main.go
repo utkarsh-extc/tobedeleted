@@ -35,6 +35,8 @@ var token string
 var beneficiaries []Beneficiaries
 var aptID string
 var booked bool
+var minAge int
+var vaccineName string
 
 func main() {
 	list := ""
@@ -44,12 +46,19 @@ func main() {
 	flag.StringVar(&emailPassword, "password", emailPassword, "Google App Password \ncreate new using https://support.google.com/accounts/answer/185833")
 	flag.DurationVar(&duration, "interval", duration, "time interval as duration \ne.g. 30s,5m,1h")
 	flag.StringVar(&mobile, "mobileNumber", "", "10 digit mobile number")
+	flag.IntVar(&minAge, "minage", 18, "min age group 18 or 45")
+	flag.StringVar(&vaccineName, "vaccine", "COVISHIELD", "perferred vaccine name\ne.g COVISHIELD or COVAXIN")
 
 	flag.Parse()
 
 	emailRecipients = strings.Split(list, ",")
 
-	if pinCode == "" || emailPassword == "" || emailFrom == "" || len(emailRecipients) < 1 || mobile == "" || len(mobile) == 11 {
+	if !(strings.Contains(vaccineName, "COVAXIN") || strings.Contains(vaccineName, "COVISHIELD")) {
+		flag.Usage()
+		return
+	}
+
+	if pinCode == "" || len(emailRecipients) < 1 || mobile == "" || len(mobile) == 11 {
 		flag.Usage()
 		return
 	}
@@ -251,7 +260,7 @@ loop:
 			found := false
 			for _, c := range slots.Centers {
 				for _, s := range c.Sessions {
-					if s.AvailableCapacity > 0 && s.MinAgeLimit < 45 {
+					if s.AvailableCapacity > 0 && s.MinAgeLimit == minAge {
 						availableCenters = append(availableCenters, c)
 						found = true
 					}
