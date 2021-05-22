@@ -55,6 +55,7 @@ func main() {
 	flag.Parse()
 
 	emailRecipients = strings.Split(list, ",")
+	sendEmail := len(emailRecipients) > 0 && emailFrom != "" && emailPassword != ""
 
 	if !(strings.Contains(vaccineName, "COVAXIN") || strings.Contains(vaccineName, "COVISHIELD")) {
 		flag.Usage()
@@ -63,7 +64,7 @@ func main() {
 
 	pinCodes = strings.Split(pinCode, ",")
 
-	if len(pinCodes) < 1 || len(emailRecipients) < 1 || mobile == "" || len(mobile) == 11 {
+	if len(pinCodes) < 1 || mobile == "" || len(mobile) == 11 {
 		flag.Usage()
 		return
 	}
@@ -335,6 +336,9 @@ loop:
 						}
 
 						aptID, _ = apt["appointment_id"]
+						if aptID != "" {
+							fmt.Println("booked apt id ", aptID)
+						}
 						booked = true
 					}(schResp)
 					break
@@ -342,25 +346,27 @@ loop:
 				blob, _ := json.MarshalIndent(availableCenters, "", "  ")
 				fmt.Println(string(blob))
 
-				emailPort := 587
+				if sendEmail {
+					emailPort := 587
 
-				// Set up authentication information.
-				auth := smtp.PlainAuth("", emailFrom, emailPassword, emailHost)
+					// Set up authentication information.
+					auth := smtp.PlainAuth("", emailFrom, emailPassword, emailHost)
 
-				// Connect to the server, authenticate, set the sender and recipient,
-				// and send the email all in one step.
-				to := emailRecipients
-				msg := []byte("To: " + list + "\r\n" +
-					"From: Golang looper\r\n" +
-					"Subject: Available Centers!\r\n" +
-					"\r\n" +
-					"Appointment ID: " + aptID + "\r\n" +
-					"\r\n" +
-					"List : \r\n" +
-					string(blob) + "\r\n")
-				err = smtp.SendMail(fmt.Sprintf("%s:%d", emailHost, emailPort), auth, emailFrom, to, msg)
-				if err != nil {
-					log.Fatal(err)
+					// Connect to the server, authenticate, set the sender and recipient,
+					// and send the email all in one step.
+					to := emailRecipients
+					msg := []byte("To: " + list + "\r\n" +
+						"From: Golang looper\r\n" +
+						"Subject: Available Centers!\r\n" +
+						"\r\n" +
+						"Appointment ID: " + aptID + "\r\n" +
+						"\r\n" +
+						"List : \r\n" +
+						string(blob) + "\r\n")
+					err = smtp.SendMail(fmt.Sprintf("%s:%d", emailHost, emailPort), auth, emailFrom, to, msg)
+					if err != nil {
+						log.Fatal(err)
+					}
 				}
 
 				count++

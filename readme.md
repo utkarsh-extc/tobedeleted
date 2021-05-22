@@ -5,7 +5,7 @@ This tool uses [CoWIN Protected APIs](https://apisetu.gov.in/public/marketplace/
 Pre Requisite
 ---
 * Beneficiaries are added
-* Same dose(1/2) for all Beneficiaries
+* Same dose either __first for all Beneficiaries__ OR __second for all__
 * Ready to put/enter OTP every 15 mins
 
 Usage
