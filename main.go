@@ -27,7 +27,7 @@ var emailRecipients = []string{""}
 var emailPassword = ""
 
 // api limit 100 req/5min per ip
-var duration = 5 * time.Minute / 98
+var duration = 5 * time.Minute / 95
 var count int
 var mobile string
 var secret = "U2FsdGVkX18qwZAGasLkIRs7giixSNa0qHKofrof7HAZ+creL7yka6fv6Jfp/ViSnyIVtCQpLRjapsF8JYBAVw==" // from inspect
@@ -38,6 +38,7 @@ var aptID string
 var booked bool
 var minAge int
 var vaccineName string
+var secondDose bool
 
 func main() {
 	list := ""
@@ -49,6 +50,7 @@ func main() {
 	flag.StringVar(&mobile, "mobileNumber", "", "10 digit mobile number")
 	flag.IntVar(&minAge, "minage", 18, "min age group 18 or 45")
 	flag.StringVar(&vaccineName, "vaccine", "COVISHIELD", "perferred vaccine name\ne.g COVISHIELD or COVAXIN")
+	flag.BoolVar(&secondDose, "secondDose", false, "set true to search slot for second dose")
 
 	flag.Parse()
 
@@ -266,7 +268,11 @@ loop:
 					freeSessions := make([]Sessions, len(c.Sessions))
 					for _, s := range c.Sessions {
 						if s.AvailableCapacity > 0 && s.MinAgeLimit == minAge {
-							freeSessions = append(freeSessions, s)
+							if secondDose && s.AvailableCapacityDose2 > 0 {
+								freeSessions = append(freeSessions, s)
+							} else if secondDose && s.AvailableCapacityDose1 > 0 {
+								freeSessions = append(freeSessions, s)
+							}
 						}
 					}
 					c.Sessions = freeSessions
@@ -280,7 +286,7 @@ loop:
 				for i := range availableCenters {
 					schInput := ScheduleRequestInput{
 						Dose: func() int {
-							if beneficiaries[0].Dose1Date == "" {
+							if !secondDose {
 								return 1
 							}
 							return 2
