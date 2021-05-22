@@ -20,6 +20,7 @@ import (
 var c http.Client
 
 var pinCode = ""
+var pinCodes []string
 var emailHost = "smtp.gmail.com"
 var emailFrom = ""
 var emailRecipients = []string{""}
@@ -29,7 +30,7 @@ var emailPassword = ""
 var duration = 5 * time.Minute / 98
 var count int
 var mobile string
-var secret = "U2FsdGVkX18qwZAGasLkIRs7giixSNa0qHKofrof7HAZ+creL7yka6fv6Jfp/ViSnyIVtCQpLRjapsF8JYBAVw=="
+var secret = "U2FsdGVkX18qwZAGasLkIRs7giixSNa0qHKofrof7HAZ+creL7yka6fv6Jfp/ViSnyIVtCQpLRjapsF8JYBAVw==" // from inspect
 var txnID string
 var token string
 var beneficiaries []Beneficiaries
@@ -40,7 +41,7 @@ var vaccineName string
 
 func main() {
 	list := ""
-	flag.StringVar(&pinCode, "pincode", "411027", "pincode of your area")
+	flag.StringVar(&pinCode, "pincode", "411027", "list of interested pincode")
 	flag.StringVar(&emailFrom, "emailId", emailFrom, "your_id@gmail.com")
 	flag.StringVar(&list, "to", emailFrom, "comma separated email list")
 	flag.StringVar(&emailPassword, "password", emailPassword, "Google App Password \ncreate new using https://support.google.com/accounts/answer/185833")
@@ -58,7 +59,9 @@ func main() {
 		return
 	}
 
-	if pinCode == "" || len(emailRecipients) < 1 || mobile == "" || len(mobile) == 11 {
+	pinCodes = strings.Split(pinCode, ",")
+
+	if len(pinCodes) < 1 || len(emailRecipients) < 1 || mobile == "" || len(mobile) == 11 {
 		flag.Usage()
 		return
 	}
@@ -79,6 +82,7 @@ createOtp:
 	otpResp, err := c.Do(otpReq)
 	if err != nil {
 		fmt.Println(fmt.Errorf("%v", err))
+		time.Sleep(30 * time.Second)
 		goto createOtp
 	}
 	func(resp *http.Response) {
@@ -91,7 +95,8 @@ createOtp:
 		tID := make(map[string]string)
 		err = json.Unmarshal(all, &tID)
 		if err != nil {
-			fmt.Println(fmt.Errorf("unable to unmarshal: %v", err))
+			fmt.Println(fmt.Errorf("unable to unmarshal otp resp: %v", err))
+			time.Sleep(30 * time.Second)
 			return
 		}
 
@@ -146,7 +151,7 @@ readOtp:
 		tok := make(map[string]string)
 		err = json.Unmarshal(all, &tok)
 		if err != nil {
-			fmt.Println(fmt.Errorf("unable to unmarshal: %v", err))
+			fmt.Println(fmt.Errorf("unable to unmarshal token: %v", err))
 			return
 		}
 
@@ -194,7 +199,7 @@ readOtp:
 			ben := new(GetBeneficiariesResponse)
 			err = json.Unmarshal(all, ben)
 			if err != nil {
-				fmt.Println(fmt.Errorf("unable to unmarshal: %v", err))
+				fmt.Println(fmt.Errorf("unable to unmarshal beneficiary: %v", err))
 				return
 			}
 
@@ -222,49 +227,53 @@ loop:
 		case <-ticker.C:
 			now := time.Now()
 			date := fmt.Sprintf("%02d-%02d-%04d", now.Day(), now.Month(), now.Year())
-			req, _ := http.NewRequest(http.MethodGet,
-				"https://cdn-api.co-vin.in/api/v2/appointment/sessions/calendarByPin?pincode="+pinCode+"&date="+date, nil)
-			req.Header.Set("authorization", "Bearer "+token)
-			req.Header.Set("cache-control", "no-cache")
-			req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
-
-			slotResp, err := c.Do(req)
-			if err != nil {
-				fmt.Println(fmt.Errorf("%v", err))
-				time.Sleep(30 * time.Second)
-				continue
-			}
-
-			if slotResp.StatusCode != http.StatusOK {
-				fmt.Println(fmt.Errorf("%v", slotResp.StatusCode))
-				time.Sleep(30 * time.Second)
-				continue
-			}
-
-			slots := new(GetResponse)
-
-			func(resp *http.Response) {
-				defer func() { _ = resp.Body.Close() }()
-				all, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					fmt.Println(fmt.Errorf("%v:stop using this tool", resp.StatusCode))
-				}
-
-				err = json.Unmarshal(all, slots)
-				if err != nil {
-					fmt.Println(fmt.Errorf("unable to unmarshal: %v", err))
-				}
-			}(slotResp)
 			var availableCenters []Centers
-
 			found := false
-			for _, c := range slots.Centers {
-				for _, s := range c.Sessions {
-					if s.AvailableCapacity > 0 && s.MinAgeLimit == minAge {
-						availableCenters = append(availableCenters, c)
-						found = true
-					}
+			for range pinCodes {
+				req, _ := http.NewRequest(http.MethodGet,
+					"https://cdn-api.co-vin.in/api/v2/appointment/sessions/calendarByPin?pincode="+pinCode+"&date="+date, nil)
+				req.Header.Set("authorization", "Bearer "+token)
+				req.Header.Set("cache-control", "no-cache")
+				req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
+
+				slotResp, err := c.Do(req)
+				if err != nil {
+					fmt.Println(fmt.Errorf("%v", err))
+					continue
 				}
+
+				if slotResp.StatusCode != http.StatusOK {
+					fmt.Println(fmt.Errorf("%v", slotResp.StatusCode))
+					continue
+				}
+
+				slots := new(GetResponse)
+
+				func(resp *http.Response) {
+					defer func() { _ = resp.Body.Close() }()
+					all, err := ioutil.ReadAll(resp.Body)
+					if err != nil {
+						fmt.Println(fmt.Errorf("%v:stop using this tool", resp.StatusCode))
+					}
+
+					err = json.Unmarshal(all, slots)
+					if err != nil {
+						fmt.Println(fmt.Errorf("unable to unmarshal slot: %v", err))
+					}
+				}(slotResp)
+
+				for _, c := range slots.Centers {
+					freeSessions := make([]Sessions, len(c.Sessions))
+					for _, s := range c.Sessions {
+						if s.AvailableCapacity > 0 && s.MinAgeLimit == minAge {
+							freeSessions = append(freeSessions, s)
+						}
+					}
+					c.Sessions = freeSessions
+					availableCenters = append(availableCenters, c)
+					found = true
+				}
+
 			}
 			if found {
 				// schedule appointment
@@ -315,7 +324,7 @@ loop:
 						apt := make(map[string]string)
 						err = json.Unmarshal(all, &apt)
 						if err != nil {
-							fmt.Println(fmt.Errorf("unable to unmarshal: %v", err))
+							fmt.Println(fmt.Errorf("unable to unmarshal schedule resp: %v", err))
 							return
 						}
 

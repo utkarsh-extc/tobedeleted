@@ -1,4 +1,4 @@
-module github.com/utkarsh-extc/tobedeleted.git
+module github.com/utkarsh-extc/tobedeleted
 
 go 1.15
 
