@@ -85,7 +85,7 @@ createOtp:
 
 	otpResp, err := c.Do(otpReq)
 	if err != nil {
-		fmt.Println(fmt.Errorf("%v", err))
+		fmt.Println(fmt.Errorf("create otp:%v", err))
 		time.Sleep(30 * time.Second)
 		goto createOtp
 	}
@@ -142,7 +142,7 @@ readOtp:
 
 	tokResp, err := c.Do(tokReq)
 	if err != nil {
-		fmt.Println(fmt.Errorf("%v", err))
+		fmt.Println(fmt.Errorf("validate otp:%v", err))
 		goto createOtp
 	}
 	func(resp *http.Response) {
@@ -190,7 +190,7 @@ readOtp:
 
 		benResp, err := c.Do(benReq)
 		if err != nil {
-			fmt.Println(fmt.Errorf("%v", err))
+			fmt.Println(fmt.Errorf("get beneficiary:%v", err))
 			return
 		}
 		func(resp *http.Response) {
@@ -248,7 +248,7 @@ loop:
 
 			slotResp, err := c.Do(req)
 			if err != nil {
-				fmt.Println(fmt.Errorf("%v", err))
+				fmt.Println(fmt.Errorf("get slots:%v", err))
 				continue
 			}
 
@@ -323,7 +323,7 @@ loop:
 
 					schResp, err := c.Do(schReq)
 					if err != nil {
-						fmt.Println(fmt.Errorf("%v", err))
+						fmt.Println(fmt.Errorf("book slot:%v", err))
 						return
 					}
 					if schResp.StatusCode != http.StatusOK {
