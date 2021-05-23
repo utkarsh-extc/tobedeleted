@@ -292,6 +292,8 @@ loop:
 			}
 
 			if found {
+				blob, _ := json.MarshalIndent(availableCenters, "", "  ")
+				fmt.Println(string(blob))
 				// schedule appointment
 				for _, center := range availableCenters {
 					schInput := ScheduleRequestInput{
@@ -314,6 +316,7 @@ loop:
 
 					blob, _ := json.Marshal(schInput)
 
+					// will not work because of CAPTCHA
 					// POST https://cdn-api.co-vin.in/api/v2/appointment/schedule
 					schReq, _ := http.NewRequest(http.MethodPost,
 						"https://cdn-api.co-vin.in/api/v2/appointment/schedule", bytes.NewBuffer(blob))
@@ -352,8 +355,7 @@ loop:
 					}(schResp)
 					break
 				}
-				blob, _ := json.MarshalIndent(availableCenters, "", "  ")
-				fmt.Println(string(blob))
+				blob, _ = json.MarshalIndent(availableCenters, "", "  ")
 
 				if sendEmail {
 					emailPort := 587
