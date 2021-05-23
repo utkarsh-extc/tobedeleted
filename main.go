@@ -253,7 +253,7 @@ loop:
 			}
 
 			if slotResp.StatusCode != http.StatusOK {
-				fmt.Println(fmt.Errorf("%v", slotResp.StatusCode))
+				fmt.Println(fmt.Errorf("get slots:%v", slotResp.StatusCode))
 				continue
 			}
 
