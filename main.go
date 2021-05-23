@@ -21,6 +21,7 @@ var c http.Client
 
 var pinCode = ""
 var pinCodes []string
+var pinCodeIndex int
 var emailHost = "smtp.gmail.com"
 var emailFrom = ""
 var emailRecipients = []string{""}
@@ -232,59 +233,67 @@ loop:
 			date := fmt.Sprintf("%02d-%02d-%04d", now.Day(), now.Month(), now.Year())
 			var availableCenters []Centers
 			found := false
-			for range pinCodes {
-				req, _ := http.NewRequest(http.MethodGet,
-					"https://cdn-api.co-vin.in/api/v2/appointment/sessions/calendarByPin?pincode="+pinCode+"&date="+date, nil)
-				req.Header.Set("authorization", "Bearer "+token)
-				req.Header.Set("cache-control", "no-cache")
-				req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
 
-				slotResp, err := c.Do(req)
+			pc := pinCodes[pinCodeIndex]
+			pinCodeIndex++
+			if pinCodeIndex >= len(pinCodes) {
+				pinCodeIndex = 0
+			}
+
+			req, _ := http.NewRequest(http.MethodGet,
+				"https://cdn-api.co-vin.in/api/v2/appointment/sessions/calendarByPin?pincode="+pc+"&date="+date, nil)
+			req.Header.Set("authorization", "Bearer "+token)
+			req.Header.Set("cache-control", "no-cache")
+			req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,like Gecko) Chrome/90.0.4430.93 Safari/537.36")
+
+			slotResp, err := c.Do(req)
+			if err != nil {
+				fmt.Println(fmt.Errorf("%v", err))
+				continue
+			}
+
+			if slotResp.StatusCode != http.StatusOK {
+				fmt.Println(fmt.Errorf("%v", slotResp.StatusCode))
+				continue
+			}
+
+			slots := new(GetResponse)
+
+			func(resp *http.Response) {
+				defer func() { _ = resp.Body.Close() }()
+				all, err := ioutil.ReadAll(resp.Body)
 				if err != nil {
-					fmt.Println(fmt.Errorf("%v", err))
-					continue
+					fmt.Println(fmt.Errorf("%v:stop using this tool", resp.StatusCode))
 				}
 
-				if slotResp.StatusCode != http.StatusOK {
-					fmt.Println(fmt.Errorf("%v", slotResp.StatusCode))
-					continue
+				err = json.Unmarshal(all, slots)
+				if err != nil {
+					fmt.Println(fmt.Errorf("unable to unmarshal slot: %v", err))
 				}
+			}(slotResp)
 
-				slots := new(GetResponse)
-
-				func(resp *http.Response) {
-					defer func() { _ = resp.Body.Close() }()
-					all, err := ioutil.ReadAll(resp.Body)
-					if err != nil {
-						fmt.Println(fmt.Errorf("%v:stop using this tool", resp.StatusCode))
-					}
-
-					err = json.Unmarshal(all, slots)
-					if err != nil {
-						fmt.Println(fmt.Errorf("unable to unmarshal slot: %v", err))
-					}
-				}(slotResp)
-
-				for _, c := range slots.Centers {
-					freeSessions := make([]Sessions, len(c.Sessions))
-					for _, s := range c.Sessions {
-						if s.AvailableCapacity > 0 && s.MinAgeLimit == minAge {
-							if secondDose && s.AvailableCapacityDose2 > 0 {
-								freeSessions = append(freeSessions, s)
-							} else if secondDose && s.AvailableCapacityDose1 > 0 {
-								freeSessions = append(freeSessions, s)
-							}
+			for _, c := range slots.Centers {
+				freeSessions := make([]Sessions, len(c.Sessions))
+				for _, s := range c.Sessions {
+					if s.AvailableCapacity > 0 && s.MinAgeLimit == minAge {
+						if secondDose && s.AvailableCapacityDose2 > 0 {
+							freeSessions = append(freeSessions, s)
+							found = true
+						} else if secondDose && s.AvailableCapacityDose1 > 0 {
+							freeSessions = append(freeSessions, s)
+							found = true
 						}
 					}
+				}
+				if len(freeSessions) > 0 {
 					c.Sessions = freeSessions
 					availableCenters = append(availableCenters, c)
-					found = true
 				}
-
 			}
+
 			if found {
 				// schedule appointment
-				for i := range availableCenters {
+				for _, center := range availableCenters {
 					schInput := ScheduleRequestInput{
 						Dose: func() int {
 							if !secondDose {
@@ -292,8 +301,8 @@ loop:
 							}
 							return 2
 						}(),
-						SessionID: availableCenters[i].Sessions[0].SessionID,
-						Slot:      availableCenters[i].Sessions[0].Slots[0],
+						SessionID: center.Sessions[0].SessionID,
+						Slot:      center.Sessions[0].Slots[0],
 						Beneficiaries: func() (ben []string) {
 							for _, b := range beneficiaries {
 								ben = append(ben,
