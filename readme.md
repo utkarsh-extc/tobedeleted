@@ -8,6 +8,8 @@ Pre Requisite
 * Same dose either __first for all Beneficiaries__ OR __second for all__
 * Ready to put/enter OTP every 15 mins
 
+--------------------------------------------------------------------------------------------------------
+
 Usage
 ---
 go run main.go model.go -h
