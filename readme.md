@@ -1,3 +1,5 @@
+[![Go](https://github.com/utkarsh-extc/tobedeleted/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/utkarsh-extc/tobedeleted/actions/workflows/go.yml)
+
 Info
 ---
 This tool uses [CoWIN Protected APIs](https://apisetu.gov.in/public/marketplace/api/cowin/cowin-protected-v2). But not sure, Slots response is real time
